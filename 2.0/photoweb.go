@@ -8,6 +8,9 @@ import (
 	"log"
 	"net/http"
 	"html/template"
+	"path/filepath"
+	"time"
+	"strings"
 )
 
 var	root=""
@@ -33,7 +36,7 @@ func Loadtmpl(){
 		temlatePath=root+View_dir+"/"+temlateName
 		log.Println("Loadtmpl()",temlatePath)
 		t:=template.Must(template.ParseFiles(temlatePath))
-		MyTemplates[temlateName]=t;
+		MyTemplates[temlateName]=t
 		log.Println(len(MyTemplates),MyTemplates[temlateName])
 	}
 }
@@ -75,48 +78,96 @@ func uploadHandler(w http.ResponseWriter,r *http.Request){
 		case "GET":
 			renderHtml(w,"upload",nil)
 		case "POST":
-			//寻找表单中名为image的文件域
-			f,h,err:=r.FormFile("image")
-			check(err)			
-			filename:=h.Filename
+			r.ParseMultipartForm(32<<20)
+			files:=r.MultipartForm.File["image"]
+			len:=len(files)
+			var tmpPath string
+			for i:=0;i<len;i++{
+				file,err:=files[i].Open()
+				defer file.Close()
+				check(err)
+				t:=time.Now()
+				tmpPath =t.Format("200601021504")
+				dir :=filepath.Join(photoph,tmpPath)
+				os.Mkdir(dir,os.ModePerm)
 
-			defer f.Close()
-			//
-			t,err:=os.Create(root+"/"+Upload_dir+"/"+filename)
-			log.Println("Create"+Upload_dir+"/"+filename)
-			check(err)
+				cur,err:= os.Create(filepath.Join(dir,files[i].Filename))
+				defer cur.Close()
+				check(err)
 
-			defer t.Close()
-			_,err=io.Copy(t,f)
-			check(err)
-			log.Println("upload:"+filename)
-			http.Redirect(w,r,"/list",http.StatusFound)
+				_,err=io.Copy(cur,file)
+				check(err)
+				log.Println(files[i].Filename)
+			}
+			http.Redirect(w,r,"/list?f="+tmpPath,http.StatusFound)
 	}
 }
 
+
 func viewHandler(w http.ResponseWriter,r *http.Request){
 	imageid:=r.FormValue("id")
-	imagepath:=root+Upload_dir+"/"+imageid
+
+	keys, ok := r.URL.Query()["f"]
+	var key string
+	if ok && len(keys) >0 {
+		key = keys[0]
+	}
+
+	imagepath:=filepath.Join(photoph,key,imageid)
 	if _,err:=os.Stat(imagepath);err!=nil{
 		http.NotFound(w,r)
 	}
 	w.Header().Set("Content-Type","image")
 	http.ServeFile(w,r,imagepath)
 }
+
 func listHandler(w http.ResponseWriter,r *http.Request){
-	fileInfoArr,err:=ioutil.ReadDir(root+"/"+"uploads")
+	keys, ok := r.URL.Query()["f"]
+	var key string
+	if ok && len(keys) >0 {
+		key = keys[0]
+		if key!=""{
+			//root+"/"+"uploads/"+key)
+			if _, err := os.Stat(filepath.Join(photoph,key)); err != nil {
+				key =""
+			}
+		}
+	}
+
+	fileInfoArr,err:=ioutil.ReadDir(filepath.Join(photoph,key))
+
 	check(err)
 	
 	locals:=make(map[string]interface{})
 	images:=[]string{}
-
+	dirs:=[]string{}
 	for _,fileInfo:=range fileInfoArr{
-		images=append(images,fileInfo.Name())
+		if fileInfo.IsDir(){
+			if _,err:=os.Stat(filepath.Join(photoph,fileInfo.Name()));err ==nil{
+				dirmid,err:=ioutil.ReadDir(filepath.Join(photoph,fileInfo.Name()))
+				check(err)
+				has:=false
+				for _,fi:=range dirmid{
+					if strings.HasSuffix(fi.Name(),".png")||strings.HasSuffix(fi.Name(),".jpg"){
+						has = true
+						break
+					}
+				}
+				if has{
+					dirs =append(dirs,fileInfo.Name())
+				}
+			}
+		}else {
+			if strings.HasSuffix(fileInfo.Name(),".png")||strings.HasSuffix(fileInfo.Name(),".jpg"){
+				images=append(images,fileInfo.Name())
+			}
+		}
 	}
 
 	locals["images"]=images
+	locals["dirs"]=dirs
 	
-	renderHtml(w,"list",locals);
+	renderHtml(w,"list",locals)
 }
 func staticDirHandler(mux *http.ServeMux,prefix string,staticDir string,flags int){
 	mux.HandleFunc(prefix,
@@ -127,15 +178,23 @@ func staticDirHandler(mux *http.ServeMux,prefix string,staticDir string,flags in
 			http.ServeFile(w,r,file)
 		})
 }
+
+var photoph string
 func main(){
     var mux=http.NewServeMux()
 	
 	root,_=os.Getwd()
+	photoph=filepath.Join(root,Upload_dir)
+	if len(os.Args)>1{
+		photoph=os.Args[1]
+	}
+
 	checkUploadDir()
 	Loadtmpl()
 	staticDirHandler(mux,"/assets/",root+"/assets",0)
 	mux.HandleFunc("/upload",uploadHandler)
 	mux.HandleFunc("/list",listHandler)
+	mux.HandleFunc("/",listHandler)
 	mux.HandleFunc("/views",viewHandler)
 	err:=http.ListenAndServe(":8090",mux)
 	log.Println("http.ListenAndServe(:8090)")
