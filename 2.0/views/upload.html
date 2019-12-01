@@ -2,11 +2,11 @@
 <html>
 <head><title>upload</title>
     <link rel="icon" type="image/png" href="assets/i/favicon.png">
-    <link rel="stylesheet" href="http://cdn.amazeui.org/amazeui/2.4.2/css/amazeui.min.css">
-    <link rel="stylesheet" href="http://cdn.amazeui.org/amazeui/2.4.2/css/amazeui.css">
-    <script src="http://libs.baidu.com/jquery/1.9.0/jquery.js"></script>
-    <script src="http://cdn.amazeui.org/amazeui/2.4.2/js/amazeui.js"></script>
-    <script src="http://cdn.amazeui.org/amazeui/2.4.2/js/amazeui.min.js"></script>
+    <link rel="stylesheet" href="assets/css/amazeui.min.css">
+    <link rel="stylesheet" href="assets/css/amazeui.css">
+    <script src="assets/js/jquery.js"></script>
+    <script src="assets/js/amazeui.js"></script>
+    <script src="assets/js/amazeui.min.js"></script>
 
 </head>
 <body>
@@ -33,7 +33,7 @@
         <div class="am-panel-bd">
             <form method="POST" action="/upload" enctype="multipart/form-data" class="am-form ">
                 <p class="am-form-help">选择一张图片上传</p>
-                <input name="image" type="file"/>
+                <input name="image" type="file" multiple="multiple"/>
                 <input type="submit" value="上传" class="am-btn-success">
             </form>
         </div>
